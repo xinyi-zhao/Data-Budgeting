@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle as pkl
 import powerlaw
+
 import seaborn
 from sklearn.cluster import KMeans,AgglomerativeClustering
 #from sklearn import datasets
@@ -35,17 +36,14 @@ warnings.filterwarnings("ignore")
 
 cluster_label =  pkl.load(open('utils/cluster_information.pkl','rb'))
 def read_dataset_and_save_basic_value(target_value, train_alg, use_file):
-    df = pd.read_csv('../arrange/'+use_file[0])
-    drop_keys = []
-    for i in range(90):
-        drop_keys.append('small2_'+str(i))
-        drop_keys.append('small3_'+str(i))
-        drop_keys.append('small2_var_'+str(i))
-        drop_keys.append('small3_var_'+str(i))
-    df.drop(drop_keys,axis = 1)
+    df = pd.read_csv('../arrange/dataset_data_100.csv')
+   # drop_keys = []
+    #df.drop(drop_keys,axis = 1)
+    #print(df['noised'])
     if('dataset_data_noised.csv' in use_file):
         df2 = pd.read_csv('../arrange/dataset_data_noised.csv')
         df = df.append(df2)
+    #print(df['noised'])
     df_pre = df
     target_keys = []
     target_keys_2 = []
@@ -89,7 +87,7 @@ def get_meta_data(X,y, task_type,n_cnt, c_cnt, meta_value):
         coe_v.append(r2_score(X_train[:,i], y_train))
         arr_appear = dict((a, X_train[:,i].tolist().count(a)) for a in X_train[:,i])
         #coe_v.append(1.0*max(arr_appear.values())/50.0)
-        if(max(arr_appear.values())< num * 0.95):
+        if(max(arr_appear.values())< X_train.shape[0] * 0.95):
             if(i < n_cnt):
                 num1 += 1
             else:
@@ -99,16 +97,16 @@ def get_meta_data(X,y, task_type,n_cnt, c_cnt, meta_value):
     if('max_coev' in meta_value):
         coe_v.sort(reverse=True)
         coe_v = coe_v[0:5]
-        ret.extend(coev)
+        ret.extend(coe_v)
     if('label_ratio' in meta_value):
         coe_v = []
         arr_appear = dict((a, y_train.tolist().count(a)) for a in y_train)
         coe_v.append(len(arr_appear.keys()))
         coe_v.append(1.0*min(arr_appear.values())/100.0)
         coe_v.append(1.0*max(arr_appear.values())/100.0)
-        ret.extend(coev)
+        ret.extend(coe_v)
     return ret
-def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, use_num,use_auto_ml, auto_ml_result = None, stop_ratio = 0.95):
+def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, use_num,use_auto_ml, auto_ml_result = None):
     chosen_label = np.array(range(100))
     np.random.seed(_r)
     np.random.shuffle(chosen_label)
@@ -116,12 +114,15 @@ def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, u
     y_train = []
     X_test = []
     y_test = []
+    noised_test = []
     print(df.shape)
     print(use_value)
     tmp1 = []
     tmp2 = []
     for index,row in df.iterrows():
         v = []
+        if(row['name'] + str(row['dataset_num']) + row['noised'] not in auto_ml_result):
+            continue
         for value_name in use_value:
             for num in use_num:
                 v.append(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name][num])
@@ -159,7 +160,10 @@ def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, u
         vy = row['all_1990']
         if(use_auto_ml):
             try:
-                vy = auto_ml_result[str(row['name'])+str(row['dataset_num'])+row['noised']][args.target_value]
+                #print(row['name'] + str(row['dataset_num']) + row['noised'] and )
+               # print(auto_ml_result[row['name'] + str(row['dataset_num']) + row['noised']][-1])
+                vy = auto_ml_result[row['name'] + str(row['dataset_num']) + row['noised']][-1]
+                #print(vy)
                 tmp1.append(row['all_1990'])
                 tmp2.append(vy)
                 if(chosen_label[cluster_label[row['name']]]<80):
@@ -168,36 +172,59 @@ def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, u
                 else:
                     X_test.append(v)
                     y_test.append(vy)
+                    if(row['noised']!='no'):
+                        noised_test.append(1)
+                    else:
+                        noised_test.append(0)
             except:
                  ii = 1
+            #print(r2_score(tmp1,tmp2))
         else:
             if(chosen_label[cluster_label[row['name']]]<80):
+                #if(row['noised'] !='no'):
+                #    continue
                 X_train.append(v)
                 y_train.append(vy)
             else:
                 X_test.append(v)
                 y_test.append(vy)
+                #print(row['noised'])
+                if(row['noised']!='no'):
+                    noised_test.append(1)
+                else:
+                    noised_test.append(0)
             
-    print(r2_score(tmp1,tmp2))
+    #print(r2_score(tmp1,tmp2))
     print(len(y_train), len(y_test))
-    return np.array(X_train),np.array(X_test),np.array(y_train),np.array(y_test)
+    return np.array(X_train),np.array(X_test),np.array(y_train),np.array(y_test), noised_test
 
 def deal_str(x):
     return str(round(x,5))
 
 def main(args):
     pilot_length = args.pilot_length
+    auto_ml_result = None
     if(args.use_auto_ml):
-        auto_ml_result = pkl.load(open('auto_ml_result_all.pkl','rb'))
+        if(args.target_value == 'accuracy'):
+            auto_ml_result = pkl.load(open('auto_ml_result_all.pkl','rb'))
+        elif(args.target_value == 'f1_score'):
+            auto_ml_result = pkl.load(open('../arrange/try_auto_ml_result_clean_f1_score.pkl','rb'))
+            print(len(auto_ml_result.keys()))
+            auto_ml_result_noised = pkl.load(open('../arrange/try_auto_ml_result_noise_f1_score.pkl','rb'))
+            print(len(auto_ml_result_noised.keys()))
+            auto_ml_result=dict(auto_ml_result, **auto_ml_result_noised)
     print(len(auto_ml_result.keys()))
     df, pre_save, pre_save_all = read_dataset_and_save_basic_value(args.target_value, args.train_alg, args.use_file)
     a = []
     a_mse = []
+    a2 = []
+    a2_mse = []
     result_coef = []
     result_int = []
+    
     for _ in range(args.split_times):
         print('######run_time:'+str(_)+'############' )
-        X_train, X_test, y_train, y_test = get_train_test(args, df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.use_num,args.use_auto_ml,auto_ml_result)
+        X_train, X_test, y_train, y_test, test_noise = get_train_test(args, df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.use_num,args.use_auto_ml,auto_ml_result)
         print(X_train.shape)
         print(y_train.shape)
         if(args.method == 'LR'):
@@ -214,10 +241,24 @@ def main(args):
        # print(X_test)
        # print(y_test)
         a_mse.append(math.sqrt(mean_squared_error(y_test,predict_results)))
+
+        clean_o = []
+        clean_t = []
+        #print(test_noise)
+        for i in range(len(y_test)):
+            if(test_noise[i] == 0):
+                clean_o.append(predict_results[i])
+                clean_t.append(y_test[i])
+        a2.append(r2_score(clean_t,clean_o))
+        a2_mse.append(math.sqrt(mean_squared_error(clean_t,clean_o)))
         result_coef.append(LR.coef_)
         result_int.append(LR.intercept_)
     print(np.array(a).mean(),np.array(a).var())
     print(np.array(a_mse).mean(),np.array(a_mse).var())
+
+    print(np.array(a2).mean(),np.array(a2).var())
+    print(np.array(a2_mse).mean(),np.array(a2_mse).var())
+
     print(np.array(result_coef).mean(axis=0))
     print(np.array(result_int).mean())
     plt.plot(a,label =  'r2')

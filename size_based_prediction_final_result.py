@@ -9,6 +9,7 @@ from sklearn.cluster import KMeans,AgglomerativeClustering
 from sklearn.datasets import load_iris
 from sklearn.neural_network import MLPClassifier,MLPRegressor
 import warnings
+import torch.optim as optimizer
 import math
 from scipy.optimize import curve_fit
 import torch
@@ -35,13 +36,13 @@ warnings.filterwarnings("ignore")
 
 cluster_label =  pkl.load(open('utils/cluster_information.pkl','rb'))
 def read_dataset_and_save_basic_value(target_value, train_alg, use_file):
-    df = pd.read_csv('../arrange/pilot_size_based_result.csv')
+    df = pd.read_csv('../arrange/dataset_data_pilot_size.csv')
     keep_keys = [15,25,35,45,55,65,75]
     drop_keys = []
     pre_save = {}
     pre_save_all = {}
     if('dataset_data_noised.csv' in use_file):
-        df2 = pd.read_csv('../arrange/pilot_size_based_result_noise.csv')
+        df2 = pd.read_csv('../arrange/dataset_data_pilot_size_noise.csv')
         df = df.append(df2)
     target_keys = []
     target_keys_2 = []
@@ -108,7 +109,7 @@ def get_meta_data(X,y, task_type,n_cnt, c_cnt, meta_value):
 
 def deal_str(x):
     return str(round(x,5))
-def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_standard,stop_ratio = 0.95):
+def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, use_num,use_auto_ml, auto_ml_result = None, stop_ratio = 0.95):
     chosen_label = np.array(range(100))
     np.random.seed(_r)
     np.random.shuffle(chosen_label)
@@ -117,13 +118,18 @@ def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_
     X_test = []
     y_test = []
     print(df.shape)
+    print(use_value)
+    tmp1 = []
+    tmp2 = []
     for index,row in df.iterrows():
-        v = [row['pilot_size']]
-        v = []
+        v = [math.exp(row['pilot_size']/100.0)]
+        #v = [math.exp(row['pilot_size'])]
+        v = [row['pilot_size']/100.0]
         for value_name in use_value:
-            v.extend(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name+str(row['size'])])
-        if(index == 0):
-            print(len(v))
+            for num in use_num:
+                v.append(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name][num])
+        #print(len(v))
+        #print(v)
         for i in range(len(v)):
             if(math.isnan(v[i])):
                 v[i] = 0
@@ -153,80 +159,113 @@ def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_
                 y_median = np.median(np.array(y))
                 y = (y > y_median).astype(int)
             v.extend(get_meta_data(X,y,task_type,row['numerical_cnt'],row['categorical_cnt'], meta_value))
-        vy = 2000
-        tt = row['all_1990']
-        for i in range(2000):
-            ss = 'all_'+str(i)
-            if(pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'f1_score'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'f1_score'][-10]  and 
-                pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][-10] 
-                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][-10]
-                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][-10] ):
-                vy = i
-                break
-        vy_class = len(class_standard)
-        for i in range(len(class_standard)):
-            if(vy <= class_standard[i]):
-                vy_class = i
-                break
-        if(chosen_label[cluster_label[row['name']]]<80):
-            X_train.append(v)
-            y_train.append(vy_class)
+        vy = row['all_1990']
+        if(use_auto_ml):
+            try:
+                if(target_value == 'f1_score'):
+                    vy = auto_ml_result[str(row['name'])+row['noised']][-1]
+                else:
+                    vy = auto_ml_result[str(row['name'])+row['noised']][-2]
+                tmp1.append(row['all_1990'])
+                tmp2.append(vy)
+                if(chosen_label[cluster_label[row['name']]]<80):
+                    X_train.append(v)
+                    y_train.append(vy)
+                else:
+                    X_test.append(v)
+                    y_test.append(vy)
+            except:
+                 ii = 1
         else:
-            X_test.append(v)
-            y_test.append(vy_class)
-    return X_train,X_test,y_train,y_test
+            if(chosen_label[cluster_label[row['name']]]<80):
+                X_train.append(v)
+                y_train.append(vy)
+            else:
+                X_test.append(v)
+                y_test.append(vy)
+            
+    print(len(y_train), len(y_test))
+    return np.array(X_train),np.array(X_test),np.array(y_train),np.array(y_test)
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.linear = nn.Linear(12, 1)
+        self.expb = torch.nn.Parameter(torch.randn((1,)))
+        self.expc = torch.nn.Parameter(torch.randn((1,)))
+    def forward(self, x):
+        x1 = self.linear(x)
+       # x2 = self.expc * torch.exp(self.expb*x[:,0]) 
+        #print(x1,x2)
+        return x1
+        x = x1.mul(x2.reshape(-1,1))
+        return x
 
 def main(args):
     pilot_length = args.pilot_length
 
     df, pre_save, pre_save_all = read_dataset_and_save_basic_value(args.target_value, args.train_alg, args.use_file)
-    plt_1 = []
-    plt_baseline = []
-    y_pred2 = []
-    y_pred3 = []
-    y_pred4 = []
+    a = []
+    a_mse = []
+    result_coef = []
+    result_int = []
+    auto_ml_result = None
     for _ in range(args.split_times):
         print('######run_time:'+str(_)+'############' )
-        X_train, X_test, y_train, y_test = get_train_test(df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.class_standard)
+        X_train, X_test, y_train, y_test = get_train_test(args, df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.use_num,args.use_auto_ml,auto_ml_result)
+        print(X_train.shape)
+        print(y_train.shape)
         if(args.method == 'LR'):
-            LR = LogisticRegression(multi_class='multinomial', solver='newton-cg')
+            LR = LinearRegression()
         elif(args.method == '2-layer NN'):
-            LR = MLPClassifier(hidden_layer_sizes=(50,50))
+            LR = MLPRegressor(hidden_layer_sizes=(50,50))
         elif(args.method == 'RF'):
-            LR = RandomForestClassifier()
+            LR = RandomForestRegressor()
         elif(args.method == '3-layer NN'):
-            LR = MLPClassifier(hidden_layer_sizes=(50,50,20))
-        LR.fit(X_train,y_train)
-        predict_results=LR.predict(X_test)
-        plt_1.append(accuracy_score(y_test,predict_results))
-        arr_appear = dict((a, y_test.count(a)) for a in y_test)
-        print(arr_appear)
-        plt_baseline.append(max(arr_appear.values())/len(y_test))
-        print(plt_1[-1],plt_baseline[-1])
-    print(np.array(plt_1).mean(),np.array(plt_1).var())
-    print(np.array(plt_baseline).mean(),np.array(plt_baseline).var())
-    plt.plot(plt_1,label =  args.method)
-    plt.plot(plt_baseline,label = 'majority_guess')
+            LR = MLPRegressor(hidden_layer_sizes=(50,50,20))
+        if(args.method == 'Net'):
+            net= Net().double()
+            X_train  = torch.from_numpy(X_train)
+            y_train = torch.from_numpy(y_train.reshape(-1,1))
+            loss_function = torch.nn.MSELoss()
+            opt = optimizer.SGD(net.parameters(), lr=0.01, weight_decay=1e-4, momentum=0.9, nesterov=True)
+            for epoch in range(500):
+                output = net(X_train)
+                loss = loss_function(output, y_train)  # 计算损失
+                loss.backward()   # 反向传播
+                opt.step()  # 更新参数
+            print(loss)
+            net.eval()
+            X_test  = torch.from_numpy(X_test)
+            predict_results = net(X_test).detach().numpy()
+            #print(predict_results)
+        else:
+            LR.fit(X_train,y_train)
+            predict_results=LR.predict(X_test)
+        a.append(r2_score(y_test,predict_results))
+       # print(X_test)
+       # print(y_test)
+        a_mse.append(math.sqrt(mean_squared_error(y_test,predict_results)))
+        if(args.method == 'LR'):
+            result_coef.append(LR.coef_)
+            result_int.append(LR.intercept_)
+    print(np.array(a).mean(),np.array(a).var())
+    print(np.array(a_mse).mean(),np.array(a_mse).var())
+    if(args.method == 'LR'):
+        print(np.array(result_coef).mean(axis=0))
+        print(np.array(result_int).mean())
+    plt.plot(a,label =  'r2')
+    plt.plot(a_mse,label = 'rmse')
     plt.xlabel('test_times')
-    plt.ylabel('accuracy')
     plt.legend()
-    plt.title('acc = '+deal_str(np.array(plt_1).mean())+ '  var =' +deal_str(np.array(plt_1).var()) + '\nbase_acc = '+deal_str(np.array(plt_baseline).mean())+ '  base_var =' +deal_str(np.array(plt_baseline).var()))
-    Save_dir = 'result_fig/need_num_prediction/'+args.target_value+'/'
+    plt.title('r2 = '+deal_str(np.array(a).mean())+ '  var =' +deal_str(np.array(a).var()) + '\n rmse = '+deal_str(np.array(a_mse).mean())+ '  var =' +deal_str(np.array(a_mse).var()))
+    Save_dir = 'result_fig/final_result_prediction/'+args.target_value+'/'
     plt.savefig(Save_dir + args.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
     
     plt.close()
-    if(args.print_coef == True) :
-        print(LR.coef_[0].sum(),len(LR.coef_[0]))
-        pr = [x for x in range(0,pilot_length-10,5)]
-
-        for i in range(len(args.class_standard)):
-            plt.plot(pr,LR.coef_[i][pr],label=str(i)+'-class')
-        plt.ylabel('coef')
-        plt.xlabel('f1_score with x data points')
-        plt.legend()
-        plt.savefig(Save_dir + 'coef_'+arg.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
-
 if __name__ == "__main__":
     pilot_length = 100
+
     args = parse_cmd()
     main(args)

@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pickle as pkl
 import powerlaw
+
 import seaborn
 from sklearn.cluster import KMeans,AgglomerativeClustering
 #from sklearn import datasets
@@ -35,23 +36,23 @@ warnings.filterwarnings("ignore")
 
 cluster_label =  pkl.load(open('utils/cluster_information.pkl','rb'))
 def read_dataset_and_save_basic_value(target_value, train_alg, use_file):
-    df = pd.read_csv('../arrange/pilot_size_based_result.csv')
-    keep_keys = [15,25,35,45,55,65,75]
-    drop_keys = []
-    pre_save = {}
-    pre_save_all = {}
+    df = pd.read_csv('../arrange/dataset_data_100.csv')
+   # drop_keys = []
+    #df.drop(drop_keys,axis = 1)
+    #print(df['noised'])
     if('dataset_data_noised.csv' in use_file):
-        df2 = pd.read_csv('../arrange/pilot_size_based_result_noise.csv')
+        df2 = pd.read_csv('../arrange/dataset_data_noised.csv')
         df = df.append(df2)
+    #print(df['noised'])
+    df_pre = df
     target_keys = []
     target_keys_2 = []
     target_key_all = []
-    for i in range(11):
+    for i in range(0,pilot_length - 10):
         target_keys.append('small_'+str(i))
         target_keys_2.append('small_var_'+str(i))
     for i in range(2000):
         target_key_all.append('all_'+str(i))
-    df_pre = df
     pre_save = {}
     pre_save_all = {}
     for index, row in df_pre.iterrows():
@@ -86,7 +87,7 @@ def get_meta_data(X,y, task_type,n_cnt, c_cnt, meta_value):
         coe_v.append(r2_score(X_train[:,i], y_train))
         arr_appear = dict((a, X_train[:,i].tolist().count(a)) for a in X_train[:,i])
         #coe_v.append(1.0*max(arr_appear.values())/50.0)
-        if(max(arr_appear.values())< num * 0.95):
+        if(max(arr_appear.values())< X_train.shape[0] * 0.95):
             if(i < n_cnt):
                 num1 += 1
             else:
@@ -96,19 +97,16 @@ def get_meta_data(X,y, task_type,n_cnt, c_cnt, meta_value):
     if('max_coev' in meta_value):
         coe_v.sort(reverse=True)
         coe_v = coe_v[0:5]
-        ret.extend(coev)
+        ret.extend(coe_v)
     if('label_ratio' in meta_value):
         coe_v = []
         arr_appear = dict((a, y_train.tolist().count(a)) for a in y_train)
         coe_v.append(len(arr_appear.keys()))
         coe_v.append(1.0*min(arr_appear.values())/100.0)
         coe_v.append(1.0*max(arr_appear.values())/100.0)
-        ret.extend(coev)
+        ret.extend(coe_v)
     return ret
-
-def deal_str(x):
-    return str(round(x,5))
-def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_standard,stop_ratio = 0.95):
+def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, use_num,use_auto_ml, auto_ml_result = None):
     chosen_label = np.array(range(100))
     np.random.seed(_r)
     np.random.shuffle(chosen_label)
@@ -116,14 +114,20 @@ def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_
     y_train = []
     X_test = []
     y_test = []
+    noised_test = []
     print(df.shape)
+    print(use_value)
+    tmp1 = []
+    tmp2 = []
     for index,row in df.iterrows():
-        v = [row['pilot_size']]
         v = []
+        if(row['name'] + str(row['dataset_num']) + row['noised'] not in auto_ml_result):
+            continue
         for value_name in use_value:
-            v.extend(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name+str(row['size'])])
-        if(index == 0):
-            print(len(v))
+            for num in use_num:
+                v.append(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name][num])
+        #print(len(v))
+        #print(v)
         for i in range(len(v)):
             if(math.isnan(v[i])):
                 v[i] = 0
@@ -153,78 +157,120 @@ def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_
                 y_median = np.median(np.array(y))
                 y = (y > y_median).astype(int)
             v.extend(get_meta_data(X,y,task_type,row['numerical_cnt'],row['categorical_cnt'], meta_value))
-        vy = 2000
-        tt = row['all_1990']
-        for i in range(2000):
-            ss = 'all_'+str(i)
-            if(pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'f1_score'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'f1_score'][-10]  and 
-                pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][-10] 
-                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][-10]
-                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][-10] ):
-                vy = i
-                break
-        vy_class = len(class_standard)
-        for i in range(len(class_standard)):
-            if(vy <= class_standard[i]):
-                vy_class = i
-                break
-        if(chosen_label[cluster_label[row['name']]]<80):
-            X_train.append(v)
-            y_train.append(vy_class)
+        vy = row['all_1990']
+        if(use_auto_ml):
+            try:
+                #print(row['name'] + str(row['dataset_num']) + row['noised'] and )
+               # print(auto_ml_result[row['name'] + str(row['dataset_num']) + row['noised']][-1])
+                vy = auto_ml_result[row['name'] + str(row['dataset_num']) + row['noised']][-1]
+                #print(vy)
+                tmp1.append(row['all_1990'])
+                tmp2.append(vy)
+                if(chosen_label[cluster_label[row['name']]]<80):
+                    X_train.append(v)
+                    y_train.append(vy)
+                else:
+                    X_test.append(v)
+                    y_test.append(vy)
+                    if(row['noised']!='no'):
+                        noised_test.append(1)
+                    else:
+                        noised_test.append(0)
+            except:
+                 ii = 1
+            #print(r2_score(tmp1,tmp2))
         else:
-            X_test.append(v)
-            y_test.append(vy_class)
-    return X_train,X_test,y_train,y_test
+            if(chosen_label[cluster_label[row['name']]]<80):
+                #if(row['noised'] !='no'):
+                #    continue
+                X_train.append(v)
+                y_train.append(vy)
+            else:
+                X_test.append(v)
+                y_test.append(vy)
+                #print(row['noised'])
+                if(row['noised']!='no'):
+                    noised_test.append(1)
+                else:
+                    noised_test.append(0)
+            
+    #print(r2_score(tmp1,tmp2))
+    print(len(y_train), len(y_test))
+    return np.array(X_train),np.array(X_test),np.array(y_train),np.array(y_test), noised_test
+
+def deal_str(x):
+    return str(round(x,5))
 
 def main(args):
+    if(args.finding == '')
     pilot_length = args.pilot_length
-
+    auto_ml_result = None
+    if(args.use_auto_ml):
+        if(args.target_value == 'accuracy'):
+            auto_ml_result = pkl.load(open('auto_ml_result_all.pkl','rb'))
+        elif(args.target_value == 'f1_score'):
+            auto_ml_result = pkl.load(open('../arrange/try_auto_ml_result_clean_f1_score.pkl','rb'))
+            print(len(auto_ml_result.keys()))
+            auto_ml_result_noised = pkl.load(open('../arrange/try_auto_ml_result_noise_f1_score.pkl','rb'))
+            print(len(auto_ml_result_noised.keys()))
+            auto_ml_result=dict(auto_ml_result, **auto_ml_result_noised)
+    print(len(auto_ml_result.keys()))
     df, pre_save, pre_save_all = read_dataset_and_save_basic_value(args.target_value, args.train_alg, args.use_file)
-    plt_1 = []
-    plt_baseline = []
-    y_pred2 = []
-    y_pred3 = []
-    y_pred4 = []
+    a = []
+    a_mse = []
+    a2 = []
+    a2_mse = []
+    result_coef = []
+    result_int = []
+    
     for _ in range(args.split_times):
         print('######run_time:'+str(_)+'############' )
-        X_train, X_test, y_train, y_test = get_train_test(df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.class_standard)
+        X_train, X_test, y_train, y_test, test_noise = get_train_test(args, df,pre_save, pre_save_all,  _, args.use_value, args.meta_value, args.use_num,args.use_auto_ml,auto_ml_result)
+        print(X_train.shape)
+        print(y_train.shape)
         if(args.method == 'LR'):
-            LR = LogisticRegression(multi_class='multinomial', solver='newton-cg')
+            LR = LinearRegression()
         elif(args.method == '2-layer NN'):
-            LR = MLPClassifier(hidden_layer_sizes=(50,50))
+            LR = MLPRegressor(hidden_layer_sizes=(50,50))
         elif(args.method == 'RF'):
-            LR = RandomForestClassifier()
+            LR = RandomForestRegressor()
         elif(args.method == '3-layer NN'):
-            LR = MLPClassifier(hidden_layer_sizes=(50,50,20))
+            LR = MLPRegressor(hidden_layer_sizes=(50,50,20))
         LR.fit(X_train,y_train)
         predict_results=LR.predict(X_test)
-        plt_1.append(accuracy_score(y_test,predict_results))
-        arr_appear = dict((a, y_test.count(a)) for a in y_test)
-        print(arr_appear)
-        plt_baseline.append(max(arr_appear.values())/len(y_test))
-        print(plt_1[-1],plt_baseline[-1])
-    print(np.array(plt_1).mean(),np.array(plt_1).var())
-    print(np.array(plt_baseline).mean(),np.array(plt_baseline).var())
-    plt.plot(plt_1,label =  args.method)
-    plt.plot(plt_baseline,label = 'majority_guess')
+        a.append(r2_score(y_test,predict_results))
+       # print(X_test)
+       # print(y_test)
+        a_mse.append(math.sqrt(mean_squared_error(y_test,predict_results)))
+
+        clean_o = []
+        clean_t = []
+        #print(test_noise)
+        for i in range(len(y_test)):
+            if(test_noise[i] == 0):
+                clean_o.append(predict_results[i])
+                clean_t.append(y_test[i])
+        a2.append(r2_score(clean_t,clean_o))
+        a2_mse.append(math.sqrt(mean_squared_error(clean_t,clean_o)))
+        result_coef.append(LR.coef_)
+        result_int.append(LR.intercept_)
+    print(np.array(a).mean(),np.array(a).var())
+    print(np.array(a_mse).mean(),np.array(a_mse).var())
+
+    print(np.array(a2).mean(),np.array(a2).var())
+    print(np.array(a2_mse).mean(),np.array(a2_mse).var())
+
+    print(np.array(result_coef).mean(axis=0))
+    print(np.array(result_int).mean())
+    plt.plot(a,label =  'r2')
+    plt.plot(a_mse,label = 'rmse')
     plt.xlabel('test_times')
-    plt.ylabel('accuracy')
     plt.legend()
-    plt.title('acc = '+deal_str(np.array(plt_1).mean())+ '  var =' +deal_str(np.array(plt_1).var()) + '\nbase_acc = '+deal_str(np.array(plt_baseline).mean())+ '  base_var =' +deal_str(np.array(plt_baseline).var()))
-    Save_dir = 'result_fig/need_num_prediction/'+args.target_value+'/'
+    plt.title('r2 = '+deal_str(np.array(a).mean())+ '  var =' +deal_str(np.array(a).var()) + '\n rmse = '+deal_str(np.array(a_mse).mean())+ '  var =' +deal_str(np.array(a_mse).var()))
+    Save_dir = 'result_fig/final_result_prediction/'+args.target_value+'/'
     plt.savefig(Save_dir + args.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
     
     plt.close()
-    if(args.print_coef == True) :
-        print(LR.coef_[0].sum(),len(LR.coef_[0]))
-        pr = [x for x in range(0,pilot_length-10,5)]
-
-        for i in range(len(args.class_standard)):
-            plt.plot(pr,LR.coef_[i][pr],label=str(i)+'-class')
-        plt.ylabel('coef')
-        plt.xlabel('f1_score with x data points')
-        plt.legend()
-        plt.savefig(Save_dir + 'coef_'+arg.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
 
 if __name__ == "__main__":
     pilot_length = 100

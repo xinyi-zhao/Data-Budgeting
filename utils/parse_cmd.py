@@ -14,6 +14,7 @@ def parse_cmd():
     parser.add_argument("--class_standard", type=int, default=[128,250,440,800])
     parser.add_argument("--print_coef", type=bool, default=False)
     parser.add_argument("--use_auto_ml", type=bool, default=False)
+    parser.add_argument("--finding", type=str, default='test_vs_real')
     parser.add_argument("--use_file", type=str, default=['dataset_data_100.csv', 'dataset_data_noised.csv'], nargs='+')
     args = parser.parse_args()
     return args
