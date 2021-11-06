@@ -199,10 +199,198 @@ def get_train_test(args,df, pre_save, pre_save_all, _r, use_value, meta_value, u
     return np.array(X_train),np.array(X_test),np.array(y_train),np.array(y_test), noised_test
 
 def deal_str(x):
-    return str(round(x,5))
+    return str(round(x,4))
 
+def test_vs_real(args):
+    df = pd.read_csv('../arrange/test_vs_real_info.csv')
+    r1 = []
+    r2 = []
+    r3 = []
+    for metric,method in [['accuracy','LR_score'],['accuracy','RF_score'],['f1_score','LR_score'],['f1_score','RF_score'],['f1_score_micro','LR_score'],['f1_score_micro','RF_score']]:
+        fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,figsize=(20,6)) 
+        for index, row in df.iterrows():
+            if(row['Evaluation Method'] != metric or row['Learning Algorithm'] != method):
+                continue
+            ax1.scatter(row['all_80'],row['all_1990'])
+            ax2.scatter(row['small_80'],row['all_1990'])
+            ax3.scatter(row['small_80'], row['all_80'])
+            r1.append(row['all_80'])
+            r2.append(row['all_1990'])
+            r3.append(row['small_80'])
+        ax1.set(title = 'Same Test Size, Different Train Size\n r2 = '+deal_str(r2_score(r1,r2))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r1,r2))),xlabel = 'Train - 80, Test - 500', ylabel = 'Train - 2000, Test - 500')
+        ax2.set(title = 'Different Test Size, Different Train Size r2 = '+deal_str(r2_score(r3,r2))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r3,r2))),xlabel = 'Train - 80, Test - 20', ylabel = 'Train - 2000, Test - 500')
+        ax3.set(title = 'Same Train Size, Differnt Test Size r2 = '+deal_str(r2_score(r1,r3))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r1,r3))), xlabel = 'Train - 80, Test - 20', ylabel = 'Train - 80, Test - 500')
+        if(method == 'LR_score'):
+            plt.suptitle('The '+metric+' difference between different train and test size using Logistic Regression')
+        else:
+            plt.suptitle('The '+metric+' difference between different train and test size using RandomForest')
+        plt.savefig('Finding_result/2_'+args.finding+'_'+metric+'_'+method)
+        plt.close()
+        print('result struture: r1 = all_80, r2 = all_1990, r3 = small_80, (r1,r2),(r1,r3),(r2,r3)')
+        print(args.finding+'_'+metric+'_'+method, r2_score(r1,r2),r2_score(r1,r3),r2_score(r2,r3))
+        print(args.finding+'_'+metric+'_'+method, math.sqrt(mean_squared_error(r1,r2)),math.sqrt(mean_squared_error(r1,r3)),math.sqrt(mean_squared_error(r2,r3)))
+def test_vs_real_new(args):
+    df = pd.read_csv('../arrange/dataset_data_100.csv')
+    r1 = []
+    r2 = []
+    r3 = []
+    for metric,method in [['accuracy','LR_score'],['accuracy','RF_score'],['f1_score','LR_score'],['f1_score','RF_score']]:
+        fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3,figsize=(20,6)) 
+        for index, row in df.iterrows():
+            if(row['Evaluation Method'] != metric or row['Learning Algorithm'] != method):
+                continue
+            ax1.scatter(row['all_80'],row['all_1990'])
+            ax2.scatter(row['small_80'],row['all_1990'])
+            ax3.scatter(row['small_80'], row['all_80'])
+            r1.append(row['all_80'])
+            r2.append(row['all_1990'])
+            r3.append(row['small_80'])
+        ax1.set(title = 'Same Test Size, Different Train Size\n r2 = '+deal_str(r2_score(r1,r2))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r1,r2))),xlabel = 'Train - 80, Test - 500', ylabel = 'Train - 2000, Test - 500')
+        ax2.set(title = 'Different Test Size, Different Train Size r2 = '+deal_str(r2_score(r3,r2))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r3,r2))),xlabel = 'Train - 80, Test - 20', ylabel = 'Train - 2000, Test - 500')
+        ax3.set(title = 'Same Train Size, Differnt Test Size r2 = '+deal_str(r2_score(r1,r3))+' rmse = '+deal_str(math.sqrt(mean_squared_error(r1,r3))), xlabel = 'Train - 80, Test - 20', ylabel = 'Train - 80, Test - 500')
+        if(method == 'LR_score'):
+            plt.suptitle('The '+metric+' difference between different train and test size using Logistic Regression')
+        else:
+            plt.suptitle('The '+metric+' difference between different train and test size using RandomForest')
+        plt.savefig('Finding_result/'+args.finding+'_'+metric+'_'+method)
+        plt.close()
+        print('result struture: r1 = all_80, r2 = all_1990, r3 = small_80, (r1,r2),(r1,r3),(r2,r3)')
+        print(args.finding+'_'+metric+'_'+method, r2_score(r1,r2),r2_score(r1,r3),r2_score(r2,r3))
+        print(args.finding+'_'+metric+'_'+method, math.sqrt(mean_squared_error(r1,r2)),math.sqrt(mean_squared_error(r1,r3)),math.sqrt(mean_squared_error(r2,r3)))
+
+
+def tradition_vs_automl(args):
+    df = {}
+    auto = {}
+    df['clean'] = pd.read_csv('../arrange/dataset_data_100.csv')
+    df['noise'] = pd.read_csv('../arrange/dataset_data_noised.csv')
+    
+    auto['clean_accuracy'] = pkl.load(open('../arrange/try_auto_ml_result_clean_accuracy.pkl','rb'))
+    auto['clean_f1_score'] = pkl.load(open('../arrange/try_auto_ml_result_clean_f1_score.pkl','rb'))
+    auto['noise_accuracy'] = pkl.load(open('../arrange/try_auto_ml_result_noise_accuracy.pkl','rb'))
+    auto['noise_f1_score'] = pkl.load(open('../arrange/try_auto_ml_result_noise_f1_score.pkl','rb'))
+    r1 = []
+    r2 = []
+    r3 = []
+    r4 = []
+    for cat,metric in [['clean','accuracy'],['clean','f1_score'],['noise','accuracy'],['noise','f1_score']]:
+        fig, (ax1, ax2) = plt.subplots(nrows=1, ncols=2,figsize=(20,6)) 
+        for index, row in df[cat].iterrows():
+            if(row['Evaluation Method'] != metric):
+                continue
+            if(row['name']+str(row['dataset_num'])+row['noised'] not in auto[cat+'_'+metric]):
+                print(row['name']+str(row['dataset_num'])+row['noised'])
+                continue
+            tmp = auto[cat+'_'+metric][row['name']+str(row['dataset_num'])+row['noised']][-1]
+            if(metric == 'accuracy'):
+                tmp = auto[cat+'_'+metric][row['name']+str(row['dataset_num'])+row['noised']][-2]
+            if(row['Learning Algorithm'] == 'LR_score'):
+                ax1.scatter(row['all_1990'],tmp)
+                r1.append(row['all_1990'])
+                r2.append(tmp)
+            else:
+                ax2.scatter(row['all_1990'],tmp)
+                r3.append(row['all_1990'])
+                r4.append(tmp)
+        ax1.set(title = 'Difference between Logitistic Regression and AutoML \n r2 = '+deal_str(r2_score(r2,r1)),xlabel = 'LR score', ylabel = 'AutoMl score')
+        ax2.set(title = 'Different between RandomForest and AutoML r2 = '+deal_str(r2_score(r4,r3)),xlabel = 'RF score', ylabel = 'AutoMl Score')
+        if(cat == 'clean'):
+            plt.suptitle('The '+metric+' difference with original datasets')
+        else:
+            plt.suptitle('The '+metric+' difference with noised datasets ')
+        plt.savefig('Finding_result/'+args.finding+'_'+metric+'_'+cat)
+        plt.close()
+       # print('result struture: r1 = all_80, r2 = all_1990, r3 = small_80, (r1,r2),(r1,r3),(r2,r3)')
+       # print(args.finding+'_'+metric+'_'+method, r2_score(r1,r2),r2_score(r1,r3),r2_score(r2,r3))
+        #print(args.finding+'_'+metric+'_'+method, math.sqrt(mean_squared_error(r1,r2)),math.sqrt(mean_squared_error(r1,r3)),math.sqrt(mean_squared_error(r2,r3)))
+
+def need_num_difference(args):
+    df = {}
+    auto = {}
+    df['clean'] = pd.read_csv('../arrange/dataset_data_100.csv')
+    df['noise'] = pd.read_csv('../arrange/dataset_data_noised.csv')
+    target_key_all = []
+    for i in range(2000):
+            target_key_all.append('all_'+str(i))
+    for cat in ['clean','noise']:
+        fig, (ax1, ax2,ax3) = plt.subplots(nrows=1, ncols=3,figsize=(20,6)) 
+        pre_save_all = {}
+        
+        for index, row in df[cat].iterrows():
+            try:
+                pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+row['Evaluation Method']+row['Learning Algorithm']] = row[target_key_all].tolist()
+            except:
+                ii = 1
+        for index, row in df[cat].iterrows():
+            if(row['Learning Algorithm'] != 'LR_score' and row['Evaluation Method'] != 'accuracy'):
+                continue
+            tmp = row['name']+str(row['dataset_num'])+row['noised']
+            t1 = 2000
+            t2 = 2000
+            for i in range(2000):
+                if(pre_save_all[tmp+'accuracyLR_score'][i] > pre_save_all[tmp+'accuracyLR_score'][1990]*0.95):
+                    t1 = i
+                    break
+            for i in range(2000):
+                if(pre_save_all[tmp+'accuracyRF_score'][i] > pre_save_all[tmp+'accuracyRF_score'][1990]*0.95):
+                    t2 = i
+                    break
+            ax1.scatter(t1,t2)
+
+            t1 = 2000
+            t2 = 2000
+            for i in range(2000):
+                if(pre_save_all[tmp+'f1_scoreLR_score'][i] > pre_save_all[tmp+'f1_scoreLR_score'][1990]*0.95):
+                    t1 = i
+                    break
+            for i in range(2000):
+                if(pre_save_all[tmp+'f1_scoreRF_score'][i] > pre_save_all[tmp+'f1_scoreRF_score'][1990]*0.95):
+                    t2 = i
+                    break
+            ax2.scatter(t1,t2)
+
+            t1 = 2000
+            t2 = 2000
+            for i in range(2000):
+                if(pre_save_all[tmp+'f1_scoreLR_score'][i] > pre_save_all[tmp+'f1_scoreLR_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'accuracyLR_score'][i] > pre_save_all[tmp+'accuracyLR_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'precisionLR_score'][i] > pre_save_all[tmp+'precisionLR_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'recallLR_score'][i] > pre_save_all[tmp+'recallLR_score'][1990]*0.95):
+                    t1 = i
+                    break
+            for i in range(2000):
+                if(pre_save_all[tmp+'f1_scoreRF_score'][i] > pre_save_all[tmp+'f1_scoreRF_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'accuracyRF_score'][i] > pre_save_all[tmp+'accuracyRF_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'precisionRF_score'][i] > pre_save_all[tmp+'precisionRF_score'][1990]*0.95 and 
+                    pre_save_all[tmp+'recallRF_score'][i] > pre_save_all[tmp+'recallRF_score'][1990]*0.95):
+                    t2 = i
+                    break
+            ax3.scatter(t1,t2)
+        ax1.set(title = 'Need Num difference with criterion = accuracy' ,xlabel = 'LR score', ylabel = 'RF score')
+        ax2.set(title = 'Need Num difference with criterion = f1_score ',xlabel = 'LR score', ylabel = 'RF Score')
+        ax3.set(title = 'Need Num difference with criterion = accuracy+f1_score+precision+recall ',xlabel = 'LR score', ylabel = 'RF Score')
+        if(cat == 'clean'):
+            plt.suptitle('The difference with original datasets')
+        else:
+            plt.suptitle('The difference with noised datasets ')
+        plt.savefig('Finding_result/'+args.finding+'_'+cat)
+        plt.close()
+       # print('result struture: r1 = all_80, r2 = all_1990, r3 = small_80, (r1,r2),(r1,r3),(r2,r3)')
+       # print(args.finding+'_'+metric+'_'+method, r2_score(r1,r2),r2_score(r1,r3),r2_score(r2,r3))
+        #print(args.finding+'_'+metri
 def main(args):
-    if(args.finding == '')
+    if(args.finding == 'test_vs_real'):
+        test_vs_real(args)
+        return
+    if(args.finding == 'test_vs_real_new'):
+        test_vs_real_new(args)
+        return 
+    if(args.finding == 'tradition_vs_automl'):
+        tradition_vs_automl(args)
+        return 
+    if(args.finding == 'need_num_difference'):
+        need_num_difference(args)
+        return
     pilot_length = args.pilot_length
     auto_ml_result = None
     if(args.use_auto_ml):
