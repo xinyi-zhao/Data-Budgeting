@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore")
 
 cluster_label =  pkl.load(open('utils/cluster_information.pkl','rb'))
 def read_dataset_and_save_basic_value(target_value, train_alg, use_file):
-    df = pd.read_csv('../arragne/'+use_file[0])
+    df = pd.read_csv('../arrange/'+use_file[0])
     drop_keys = []
     for i in range(90):
         drop_keys.append('small2_'+str(i))
@@ -123,7 +123,7 @@ def get_train_test(df, pre_save, pre_save_all, _r, use_value, meta_value, class_
     for index,row in df.iterrows():
         v = []
         for value_name in use_value:
-            v.extend(pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name])
+            v.extend([pre_save[row['name']+str(row['dataset_num'])+row['noised']+value_name][85]])
         #print(len(v))
         for i in range(len(v)):
             if(math.isnan(v[i])):
@@ -181,6 +181,22 @@ def main(args):
     pilot_length = args.pilot_length
 
     df, pre_save, pre_save_all = read_dataset_and_save_basic_value(args.target_value, args.train_alg, args.use_file)
+    tmp = []
+    for index,row in df.iterrows():
+        stop_ratio = 0.95
+        vy =2000
+        tt = row['all_1990']
+        for i in range(2000):
+            ss = 'all_'+str(i)
+            if(row[ss] > tt*stop_ratio and 
+                pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'accuracy'][-10] 
+                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'recall'][-10]
+                and pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][i] > stop_ratio*pre_save_all[row['name']+str(row['dataset_num'])+row['noised']+'precision'][-10] ):
+                vy = i
+                break
+        tmp.append(vy)
+    tmp=np.array(tmp)
+    print(np.percentile(tmp,20),np.percentile(tmp,40),np.percentile(tmp,60),np.percentile(tmp,80))
     plt_1 = []
     plt_baseline = []
     y_pred2 = []
@@ -220,12 +236,12 @@ def main(args):
         print(LR.coef_[0].sum(),len(LR.coef_[0]))
         pr = [x for x in range(0,pilot_length-10,5)]
 
-        for i in range(len(args.class_standard)):
+        for i in range(len(args.class_standard)+1):
             plt.plot(pr,LR.coef_[i][pr],label=str(i)+'-class')
         plt.ylabel('coef')
         plt.xlabel('f1_score with x data points')
         plt.legend()
-        plt.savefig(Save_dir + 'coef_'+arg.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
+        plt.savefig(Save_dir + 'coef_'+args.method+ '_'.join(args.use_value)+'_'.join(args.meta_value))
 
 if __name__ == "__main__":
     pilot_length = 100

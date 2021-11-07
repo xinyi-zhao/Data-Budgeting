@@ -11,10 +11,11 @@ def parse_cmd():
     parser.add_argument("--train_alg", type=str, default = 'RF_score', help  = 'RF_score/LR_score')
     parser.add_argument("--meta_value", type=str, default=[],help = 'feature_cnt/max_coev/label_ratio', nargs='+')
     parser.add_argument("--pilot_length", type=int, default = 100)
-    parser.add_argument("--class_standard", type=int, default=[128,250,440,800])
+    parser.add_argument("--class_standard", type=int, default=[130,280,550,1020])
     parser.add_argument("--print_coef", type=bool, default=False)
     parser.add_argument("--use_auto_ml", type=bool, default=False)
     parser.add_argument("--finding", type=str, default='test_vs_real')
+    parser.add_argument("--save_fig", type=str, default='test_vs_real')
     parser.add_argument("--use_file", type=str, default=['dataset_data_100.csv', 'dataset_data_noised.csv'], nargs='+')
     args = parser.parse_args()
     return args
